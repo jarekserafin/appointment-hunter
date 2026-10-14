@@ -1,4 +1,5 @@
 .env
 .venv
 data_mock.json
+data_mock_2.json
 /data
