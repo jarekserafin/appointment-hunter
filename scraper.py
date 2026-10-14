@@ -1,9 +1,7 @@
-import argparse
 import datetime
 import os
 from uuid import uuid4
 import json
-import pprint
 
 import requests
 from dotenv import load_dotenv
@@ -11,10 +9,12 @@ from dotenv import load_dotenv
 load_dotenv()
 LOGIN = os.getenv("LOGIN")
 PASSWORD = os.getenv("PASSWORD")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+TELEGRAM_URL = "https://api.telegram.org/bot"
 BASE_URL = "https://portalpacjenta.luxmed.pl"
 LOGIN_ENDPOINT = "/PatientPortal/Account/Login"
 SEARCH_ENDPOINT = "/PatientPortal/NewPortal/terms/"
-
 
 def print_appointment_list(data: dict) -> None:
     available_slots_count = 0
@@ -23,33 +23,6 @@ def print_appointment_list(data: dict) -> None:
 
     print(f"Znaleziono {available_slots_count} terminów")
 
-def extract_slots(data: dict) -> list[dict]:
-    result = []
-    for day in data["termsForService"]["termsForDays"]:
-        for term in day["terms"]:
-            result.append({
-                "scheduleId": term["scheduleId"],
-                "serviceId": term["serviceId"],
-                "dateTimeFrom": term["dateTimeFrom"],
-                "dateTimeTo": term["dateTimeTo"],
-                "doctorId": term["doctor"]["id"],
-                "doctorFirstName": term["doctor"]["firstName"],
-                "doctorLastName": term["doctor"]["lastName"],
-                "clinicId": term["clinicId"],
-                "clinic": term["clinic"],
-                "isTelemedicine": term["isTelemedicine"]
-            })
-    return result
-
-def check_if_new_slots(current_slots: list[dict], old_slots: list[dict]) -> list[dict]:
-    new_slots = []
-
-    for slot in current_slots:
-        if slot in old_slots:
-            continue
-        new_slots.append(slot)
-
-    return new_slots
 
 def get_available_slots(
         service_variant_id: int = 4502,
@@ -77,7 +50,7 @@ def get_available_slots(
         "serviceVariantSource": 2,
         "locationReplaced": "false",
         "delocalized": "false"
-}
+    }
 
     with requests.Session() as session:
         login_response = session.post(
@@ -95,14 +68,58 @@ def get_available_slots(
     return data
 
 
+def extract_slots(data: dict) -> list[dict]:
+    result = []
+    for day in data["termsForService"]["termsForDays"]:
+        for term in day["terms"]:
+            result.append({
+                "scheduleId": term["scheduleId"],
+                "serviceId": term["serviceId"],
+                "dateTimeFrom": term["dateTimeFrom"],
+                "dateTimeTo": term["dateTimeTo"],
+                "doctorId": term["doctor"]["id"],
+                "doctorFirstName": term["doctor"]["firstName"],
+                "doctorLastName": term["doctor"]["lastName"],
+                "clinicId": term["clinicId"],
+                "clinic": term["clinic"],
+                "isTelemedicine": term["isTelemedicine"]
+            })
+    return result
+
+
+def check_if_new_slots(
+        current_slots: list[dict],
+        old_slots: list[dict]
+        ) -> list[dict]:
+    new_slots = []
+
+    for slot in current_slots:
+        if slot in old_slots:
+            continue
+        new_slots.append(slot)
+
+    return new_slots
+
+
+def send_telegram_notification(slots: list[dict] = None) -> None:
+    url = TELEGRAM_URL + TELEGRAM_BOT_TOKEN + "/sendMessage"
+    params = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": "Kawa wleciała tętno jest w normie"
+    }
+    response = requests.post(url=url, params=params, timeout=10)
+    print(response.status_code)
+    print(response.json)
+    return
+
+
 def main() -> None:
-    with open("data_mock.json", "r") as file:
-        data = json.load(file)
-    with open("data_mock_2.json", "r") as file2:
-        data_2 = json.load(file2)
-    # data = get_available_slots()
-    # pprint.pp(extract_slots(data))
-    check_if_new_slots(current_slots=extract_slots(data), old_slots=extract_slots(data_2))
+    data = get_available_slots()
+    check_if_new_slots(
+        current_slots=extract_slots(data),
+        old_slots=extract_slots(data_2)
+        )
+    send_telegram_notification()
 
 
 if __name__ == "__main__":
