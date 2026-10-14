@@ -65,9 +65,9 @@ def get_available_slots():
         data = search_response.json()
     return data
 
-# data = get_available_slots()
+data = get_available_slots()
 
-with open(file="data_mock.json", mode="r", encoding="utf-8") as file:
-    data = json.load(file)
+# with open(file="data_mock.json", mode="r", encoding="utf-8") as file:
+#     data = json.load(file)
 
 print_appointment_list(data=data)
