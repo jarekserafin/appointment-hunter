@@ -2,6 +2,8 @@ import datetime
 import os
 from uuid import uuid4
 import json
+import time
+import enum
 
 import requests
 from dotenv import load_dotenv
@@ -15,6 +17,9 @@ TELEGRAM_URL = "https://api.telegram.org/bot"
 BASE_URL = "https://portalpacjenta.luxmed.pl"
 LOGIN_ENDPOINT = "/PatientPortal/Account/Login"
 SEARCH_ENDPOINT = "/PatientPortal/NewPortal/terms/"
+not_found_message = "Brak nowych terminów"
+found_message = "Znaleziono nowe terminy:"
+scan_start_message = "Uruchomiono skan nowych terminów w pętli."
 
 def print_appointment_list(data: dict) -> None:
     available_slots_count = 0
@@ -25,7 +30,7 @@ def print_appointment_list(data: dict) -> None:
 
 
 def get_available_slots(
-        service_variant_id: int = 4502,
+        service_variant_id: int = 8294,
         city: str = "Warszawa"
         ) -> dict:
     payload: dict[str, str] = {
@@ -90,7 +95,7 @@ def extract_slots(data: dict) -> list[dict]:
 def check_if_new_slots(
         current_slots: list[dict],
         old_slots: list[dict]
-        ) -> list[dict]:
+        ) -> list[dict] | None:
     new_slots = []
 
     for slot in current_slots:
@@ -98,28 +103,51 @@ def check_if_new_slots(
             continue
         new_slots.append(slot)
 
-    return new_slots
+    if len(new_slots) > 0:
+        return new_slots
+    return None
 
 
-def send_telegram_notification(slots: list[dict] = None) -> None:
+def send_telegram_notification(text) -> None:
     url = TELEGRAM_URL + TELEGRAM_BOT_TOKEN + "/sendMessage"
     params = {
         "chat_id": TELEGRAM_CHAT_ID,
-        "text": "Kawa wleciała tętno jest w normie"
+        "text": text
     }
-    response = requests.post(url=url, params=params, timeout=10)
-    print(response.status_code)
-    print(response.json)
+    requests.post(url=url, params=params, timeout=10)
     return
+
+def prepare_telegram_notification(mode: str, data: list[dict]|None = None) -> str:
+    if mode == "start":
+        notification = f"{scan_start_message}\n"
+    elif mode == "new":
+        notification = f"{found_message}\n"
+        for slot in data:
+            dateTimeFrom = slot["dateTimeFrom"]
+            docFirstName = slot["doctorFirstName"]
+            docLastName = slot["doctorLastName"]
+            clinic = slot["clinic"]
+            notification += f"{dateTimeFrom[0:10]} {dateTimeFrom[11:]} {docFirstName} {docLastName} w {clinic}\n"
+
+    return notification
 
 
 def main() -> None:
-    data = get_available_slots()
-    check_if_new_slots(
-        current_slots=extract_slots(data),
-        old_slots=extract_slots(data_2)
-        )
-    send_telegram_notification()
+    first_scan = get_available_slots()
+    send_telegram_notification(text=prepare_telegram_notification(mode="start"))
+    if len(extract_slots(first_scan)) > 0:
+        send_telegram_notification(text=prepare_telegram_notification(mode="new", data=extract_slots(first_scan)))
+    while True:
+        time.sleep(120)
+        second_scan = get_available_slots()
+        new_slots = check_if_new_slots(
+            current_slots=extract_slots(second_scan),
+            old_slots=extract_slots(first_scan)
+            )
+        first_scan = second_scan
+        if new_slots is not None:
+            send_telegram_notification(text=prepare_telegram_notification(mode="new", data=new_slots))
+
 
 
 if __name__ == "__main__":
