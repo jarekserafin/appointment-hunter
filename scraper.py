@@ -4,11 +4,12 @@ from uuid import uuid4
 import json
 import time
 import enum
+from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(dotenv_path=Path(__file__).with_name(".env"), override=True)
 LOGIN = os.getenv("LOGIN")
 PASSWORD = os.getenv("PASSWORD")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -19,7 +20,18 @@ LOGIN_ENDPOINT = "/PatientPortal/Account/Login"
 SEARCH_ENDPOINT = "/PatientPortal/NewPortal/terms/"
 not_found_message = "Brak nowych terminów"
 found_message = "Znaleziono nowe terminy:"
-scan_start_message = "Uruchomiono skan nowych terminów w pętli."
+scan_start_message = "Uruchomiono skan nowych terminów w pętli dla usługi: {service_name}"
+
+
+def get_service_from_json(service_id: int) -> str | None:
+    with open("data/all_services.json", "r") as file:
+        data = json.load(file)
+    for item in data:
+        for service in item["children"]:
+            if service["id"] == service_id:
+                return service["name"]
+    return None
+
 
 def print_appointment_list(data: dict) -> None:
     available_slots_count = 0
@@ -117,9 +129,10 @@ def send_telegram_notification(text) -> None:
     requests.post(url=url, params=params, timeout=10)
     return
 
-def prepare_telegram_notification(mode: str, data: list[dict]|None = None) -> str:
+
+def prepare_telegram_notification(mode: str, data: list[dict]|None = None, service_name: str = None) -> str:
     if mode == "start":
-        notification = f"{scan_start_message}\n"
+        notification = scan_start_message.format(service_name=service_name) + "\n"
     elif mode == "new":
         notification = f"{found_message}\n"
         for slot in data:
@@ -133,13 +146,17 @@ def prepare_telegram_notification(mode: str, data: list[dict]|None = None) -> st
 
 
 def main() -> None:
-    first_scan = get_available_slots()
-    send_telegram_notification(text=prepare_telegram_notification(mode="start"))
+    wanted_service_variant_id = 4468
+    service_name = get_service_from_json(wanted_service_variant_id)
+    first_scan = get_available_slots(service_variant_id=wanted_service_variant_id, city="Warszawa")
+    send_telegram_notification(text=prepare_telegram_notification(mode="start", service_name=service_name))
     if len(extract_slots(first_scan)) > 0:
-        send_telegram_notification(text=prepare_telegram_notification(mode="new", data=extract_slots(first_scan)))
+        send_telegram_notification(
+            text=prepare_telegram_notification(mode="new", data=extract_slots(first_scan))
+            )
     while True:
-        time.sleep(120)
-        second_scan = get_available_slots()
+        time.sleep(300)
+        second_scan = get_available_slots(service_variant_id=wanted_service_variant_id, city="Warszawa")
         new_slots = check_if_new_slots(
             current_slots=extract_slots(second_scan),
             old_slots=extract_slots(first_scan)
