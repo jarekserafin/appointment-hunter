@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 import time
@@ -7,14 +8,10 @@ import requests
 from dotenv import load_dotenv
 
 from luxmed import SessionExpiredError, get_available_slots, login
-
-load_dotenv(dotenv_path=Path(__file__).with_name(".env"), override=True)
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-TELEGRAM_URL = "https://api.telegram.org/bot"
-not_found_message = "Brak nowych terminów"
-found_message = "Znaleziono nowe terminy:"
-scan_start_message = "Uruchomiono skan nowych terminów w pętli dla usługi: {service_name}"  # noqa: E501
+from telegram_notifications import (
+    prepare_telegram_notification,
+    send_telegram_notification,
+)
 
 
 def get_service_from_json(service_id: int) -> str | None:
@@ -39,25 +36,26 @@ def extract_slots(data: dict) -> list[dict]:
     result = []
     for day in data["termsForService"]["termsForDays"]:
         for term in day["terms"]:
-            result.append({
-                "scheduleId": term["scheduleId"],
-                "serviceId": term["serviceId"],
-                "dateTimeFrom": term["dateTimeFrom"],
-                "dateTimeTo": term["dateTimeTo"],
-                "doctorId": term["doctor"]["id"],
-                "doctorFirstName": term["doctor"]["firstName"],
-                "doctorLastName": term["doctor"]["lastName"],
-                "clinicId": term["clinicId"],
-                "clinic": term["clinic"],
-                "isTelemedicine": term["isTelemedicine"]
-            })
+            result.append(
+                {
+                    "scheduleId": term["scheduleId"],
+                    "serviceId": term["serviceId"],
+                    "dateTimeFrom": term["dateTimeFrom"],
+                    "dateTimeTo": term["dateTimeTo"],
+                    "doctorId": term["doctor"]["id"],
+                    "doctorFirstName": term["doctor"]["firstName"],
+                    "doctorLastName": term["doctor"]["lastName"],
+                    "clinicId": term["clinicId"],
+                    "clinic": term["clinic"],
+                    "isTelemedicine": term["isTelemedicine"],
+                }
+            )
     return result
 
 
 def check_if_new_slots(
-        current_slots: list[dict],
-        old_slots: list[dict]
-        ) -> list[dict] | None:
+    current_slots: list[dict], old_slots: list[dict]
+) -> list[dict] | None:
     new_slots = []
 
     for slot in current_slots:
@@ -70,38 +68,6 @@ def check_if_new_slots(
     return None
 
 
-def send_telegram_notification(text) -> None:
-    url = TELEGRAM_URL + TELEGRAM_BOT_TOKEN + "/sendMessage"
-    params = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": text
-    }
-    response = requests.post(url=url, params=params, timeout=10)
-    response.raise_for_status()
-    return
-
-
-def prepare_telegram_notification(
-        mode: str,
-        data: list[dict] | None = None,
-        service_name: str = None
-        ) -> str:
-    if mode == "start":
-        notification = scan_start_message.format(service_name=service_name) + "\n"  # noqa: E501
-    elif mode == "new":
-        notification = f"{found_message}\n"
-        for slot in data:
-            dateTimeFrom = slot["dateTimeFrom"]
-            docFirstName = slot["doctorFirstName"]
-            docLastName = slot["doctorLastName"]
-            clinic = slot["clinic"]
-            notification += (
-                f"{dateTimeFrom[0:10]} {dateTimeFrom[11:]} "
-                f"{docFirstName} {docLastName} w {clinic}\n"
-            )
-    return notification
-
-
 def main() -> None:
     with requests.Session() as session:
         login(session=session)
@@ -112,26 +78,27 @@ def main() -> None:
             first_scan = get_available_slots(
                 session=session,
                 service_variant_id=wanted_service_variant_id,
-                city="Warszawa"
-                )
+                city="Warszawa",
+            )
 
             send_telegram_notification(
                 text=prepare_telegram_notification(
                     mode="start", service_name=service_name
-                    )
+                )
             )
         except requests.exceptions.RequestException as e:
-            print(f"Error while fetching slots or sending notification ({type(e).__name__})")  # noqa: E501
+            print(
+                f"Error while fetching slots or sending notification ({type(e).__name__})"
+            )
             return
 
         if len(extract_slots(first_scan)) > 0:
             try:
                 send_telegram_notification(
                     text=prepare_telegram_notification(
-                        mode="new",
-                        data=extract_slots(first_scan)
-                        )
+                        mode="new", data=extract_slots(first_scan)
                     )
+                )
             except requests.exceptions.RequestException as e:
                 print(f"Error while sending notification ({type(e).__name__})")
                 return
@@ -143,19 +110,29 @@ def main() -> None:
                 second_scan = get_available_slots(
                     session=session,
                     service_variant_id=wanted_service_variant_id,
-                    city="Warszawa"
+                    city="Warszawa",
                 )
                 new_slots = check_if_new_slots(
                     current_slots=extract_slots(second_scan),
-                    old_slots=extract_slots(first_scan)
-                    )
+                    old_slots=extract_slots(first_scan),
+                )
                 if new_slots is not None:
                     send_telegram_notification(
-                        text=prepare_telegram_notification(mode="new", data=new_slots)  # noqa: E501
+                        text=prepare_telegram_notification(
+                            mode="new", data=new_slots
                         )
+                    )
                 first_scan = second_scan
+
+                current_time = str(datetime.datetime.now())[10:19]
+                print(
+                    "Skan zakończony powodzeniem, brak nowych terminów " + current_time
+                )
+
             except requests.exceptions.RequestException as e:
-                print(f"Error while fetching slots or sending notification ({type(e).__name__})")  # noqa: E501
+                print(
+                    f"Error while fetching slots or sending notification ({type(e).__name__})"
+                )
                 continue
             except SessionExpiredError:
                 try:

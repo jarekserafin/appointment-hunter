@@ -1,6 +1,7 @@
 .env
 .venv
+/__pycache__
+/data
 data_mock.json
 data_mock_2.json
-/data
-/__pycache__
+test.py

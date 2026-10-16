@@ -20,24 +20,17 @@ class SessionExpiredError(Exception):
 
 
 def login(session: requests.Session | None = None) -> None:
-    login_payload: dict[str, str] = {
-        "login": LOGIN,
-        "password": PASSWORD
-    }
+    login_payload: dict[str, str] = {"login": LOGIN, "password": PASSWORD}
     login_url = BASE_URL + LOGIN_ENDPOINT
-    login_response = session.post(
-        url=login_url,
-        json=login_payload,
-        timeout=10
-    )
+    login_response = session.post(url=login_url, json=login_payload, timeout=10)
     login_response.raise_for_status()
 
 
 def get_available_slots(
-        session: requests.Session | None = None,
-        service_variant_id: int = 8294,
-        city: str = "Warszawa",
-        ) -> dict:
+    session: requests.Session | None = None,
+    service_variant_id: int = 8294,
+    city: str = "Warszawa",
+) -> dict:
     start_day = datetime.date.today()
     end_day = start_day + datetime.timedelta(days=13)
     search_params: dict[str, str | int] = {
@@ -54,12 +47,10 @@ def get_available_slots(
         "searchByMedicalSpecialist": "false",
         "serviceVariantSource": 2,
         "locationReplaced": "false",
-        "delocalized": "false"
+        "delocalized": "false",
     }
     search_response = session.get(
-        url=BASE_URL+SEARCH_ENDPOINT,
-        params=search_params,
-        timeout=10
+        url=BASE_URL + SEARCH_ENDPOINT, params=search_params, timeout=10
     )
     search_response.raise_for_status()
     if search_response.url == LOGIN_URL:
