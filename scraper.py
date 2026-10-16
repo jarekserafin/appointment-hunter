@@ -1,15 +1,12 @@
-import datetime
-import os
-from uuid import uuid4
 import json
+import os
 import time
-import enum
 from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
-from luxmed import get_available_slots, login, SessionExpiredError
 
+from luxmed import SessionExpiredError, get_available_slots, login
 
 load_dotenv(dotenv_path=Path(__file__).with_name(".env"), override=True)
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -17,7 +14,7 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 TELEGRAM_URL = "https://api.telegram.org/bot"
 not_found_message = "Brak nowych terminów"
 found_message = "Znaleziono nowe terminy:"
-scan_start_message = "Uruchomiono skan nowych terminów w pętli dla usługi: {service_name}"
+scan_start_message = "Uruchomiono skan nowych terminów w pętli dla usługi: {service_name}"  # noqa: E501
 
 
 def get_service_from_json(service_id: int) -> str | None:
@@ -84,9 +81,13 @@ def send_telegram_notification(text) -> None:
     return
 
 
-def prepare_telegram_notification(mode: str, data: list[dict]|None = None, service_name: str = None) -> str:
+def prepare_telegram_notification(
+        mode: str,
+        data: list[dict] | None = None,
+        service_name: str = None
+        ) -> str:
     if mode == "start":
-        notification = scan_start_message.format(service_name=service_name) + "\n"
+        notification = scan_start_message.format(service_name=service_name) + "\n"  # noqa: E501
     elif mode == "new":
         notification = f"{found_message}\n"
         for slot in data:
@@ -94,8 +95,10 @@ def prepare_telegram_notification(mode: str, data: list[dict]|None = None, servi
             docFirstName = slot["doctorFirstName"]
             docLastName = slot["doctorLastName"]
             clinic = slot["clinic"]
-            notification += f"{dateTimeFrom[0:10]} {dateTimeFrom[11:]} {docFirstName} {docLastName} w {clinic}\n"
-
+            notification += (
+                f"{dateTimeFrom[0:10]} {dateTimeFrom[11:]} "
+                f"{docFirstName} {docLastName} w {clinic}\n"
+            )
     return notification
 
 
@@ -112,15 +115,22 @@ def main() -> None:
                 city="Warszawa"
                 )
 
-            send_telegram_notification(text=prepare_telegram_notification(mode="start", service_name=service_name))
+            send_telegram_notification(
+                text=prepare_telegram_notification(
+                    mode="start", service_name=service_name
+                    )
+            )
         except requests.exceptions.RequestException as e:
-            print(f"Error while fetching slots or sending notification ({type(e).__name__})")
+            print(f"Error while fetching slots or sending notification ({type(e).__name__})")  # noqa: E501
             return
 
         if len(extract_slots(first_scan)) > 0:
             try:
                 send_telegram_notification(
-                    text=prepare_telegram_notification(mode="new", data=extract_slots(first_scan))
+                    text=prepare_telegram_notification(
+                        mode="new",
+                        data=extract_slots(first_scan)
+                        )
                     )
             except requests.exceptions.RequestException as e:
                 print(f"Error while sending notification ({type(e).__name__})")
@@ -130,22 +140,29 @@ def main() -> None:
             time.sleep(180)
 
             try:
-                second_scan = get_available_slots(session=session, service_variant_id=wanted_service_variant_id, city="Warszawa")
+                second_scan = get_available_slots(
+                    session=session,
+                    service_variant_id=wanted_service_variant_id,
+                    city="Warszawa"
+                )
                 new_slots = check_if_new_slots(
                     current_slots=extract_slots(second_scan),
                     old_slots=extract_slots(first_scan)
                     )
                 if new_slots is not None:
-                    send_telegram_notification(text=prepare_telegram_notification(mode="new", data=new_slots))
+                    send_telegram_notification(
+                        text=prepare_telegram_notification(mode="new", data=new_slots)  # noqa: E501
+                        )
                 first_scan = second_scan
             except requests.exceptions.RequestException as e:
-                print(f"Error while fetching slots or sending notification ({type(e).__name__})")
+                print(f"Error while fetching slots or sending notification ({type(e).__name__})")  # noqa: E501
                 continue
             except SessionExpiredError:
                 try:
                     login(session=session)
                 except requests.exceptions.RequestException as e:
                     print(f"Error while logging in: ({type(e).__name__})")
+
 
 if __name__ == "__main__":
     main()

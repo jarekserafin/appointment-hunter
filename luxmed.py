@@ -1,16 +1,15 @@
 import datetime
 import os
-from uuid import uuid4
 from pathlib import Path
+from uuid import uuid4
 
 import requests
 from dotenv import load_dotenv
 
-
 BASE_URL = "https://portalpacjenta.luxmed.pl"
 LOGIN_ENDPOINT = "/PatientPortal/Account/Login"
 SEARCH_ENDPOINT = "/PatientPortal/NewPortal/terms/"
-
+LOGIN_URL = BASE_URL + "/PatientPortal/NewPortal/Page/Account/Login"
 load_dotenv(dotenv_path=Path(__file__).with_name(".env"), override=True)
 LOGIN = os.getenv("LOGIN")
 PASSWORD = os.getenv("PASSWORD")
@@ -20,9 +19,7 @@ class SessionExpiredError(Exception):
     pass
 
 
-def login(
-        session: requests.Session | None = None,
-    ):
+def login(session: requests.Session | None = None) -> None:
     login_payload: dict[str, str] = {
         "login": LOGIN,
         "password": PASSWORD
@@ -41,7 +38,6 @@ def get_available_slots(
         service_variant_id: int = 8294,
         city: str = "Warszawa",
         ) -> dict:
-    login_url = "https://portalpacjenta.luxmed.pl/PatientPortal/NewPortal/Page/Account/Login"
     start_day = datetime.date.today()
     end_day = start_day + datetime.timedelta(days=13)
     search_params: dict[str, str | int] = {
@@ -66,7 +62,7 @@ def get_available_slots(
         timeout=10
     )
     search_response.raise_for_status()
-    if search_response.url == login_url:
+    if search_response.url == LOGIN_URL:
         raise SessionExpiredError("Sesja wymaga ponownego logowania")
     data = search_response.json()
 
