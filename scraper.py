@@ -116,6 +116,9 @@ def main() -> None:
                     current_slots=extract_slots(second_scan),
                     old_slots=extract_slots(first_scan),
                 )
+                scan_time = str(datetime.datetime.now())[10:19]
+                print("Skan zakończony powodzeniem o godzinie: " + scan_time)
+
                 if new_slots is not None:
                     send_telegram_notification(
                         text=prepare_telegram_notification(
@@ -123,11 +126,6 @@ def main() -> None:
                         )
                     )
                 first_scan = second_scan
-
-                current_time = str(datetime.datetime.now())[10:19]
-                print(
-                    "Skan zakończony powodzeniem, brak nowych terminów " + current_time
-                )
 
             except requests.exceptions.RequestException as e:
                 print(
