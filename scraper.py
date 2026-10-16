@@ -135,8 +135,10 @@ def main() -> None:
                 )
                 continue
             except SessionExpiredError:
+                print("Sesja wygasła.")
                 try:
                     login(session=session)
+                    print("Ponowne logowanie zakończone sukcesem.")
                 except requests.exceptions.RequestException as e:
                     print(f"Error while logging in: ({type(e).__name__})")
 
