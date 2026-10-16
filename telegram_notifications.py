@@ -16,9 +16,9 @@ scan_start_message = (
 )
 
 
-def send_telegram_notification(text) -> None:
+def send_telegram_notification(notification_text: str) -> None:
     url = TELEGRAM_URL + TELEGRAM_BOT_TOKEN + "/sendMessage"
-    params = {"chat_id": TELEGRAM_CHAT_ID, "text": text}
+    params = {"chat_id": TELEGRAM_CHAT_ID, "text": notification_text}
     response = requests.post(url=url, params=params, timeout=10)
     response.raise_for_status()
     return
